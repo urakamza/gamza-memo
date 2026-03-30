@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=감자 메모
+Comment=감자 메모
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/gamzamemo %u
+Terminal=false
+Type=Application
+Icon=gamzamemo
+Categories=Utility;
+StartupWMClass=gamzamemo
+
+ 

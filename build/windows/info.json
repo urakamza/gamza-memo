@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "1.0.1"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "1.0.1",
+			"CompanyName": "Urakamza",
+			"FileDescription": "감자 메모",
+			"LegalCopyright": "(c) 2026, Urakamza",
+			"ProductName": "감자 메모",
+			"Comments": "This is a comment"
+		}
+	}
+}

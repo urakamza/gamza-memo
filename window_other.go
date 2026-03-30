@@ -1,0 +1,8 @@
+//go:build !windows
+
+package main
+
+import "github.com/wailsapp/wails/v3/pkg/application"
+
+func stopFlash(win *application.WebviewWindow)      {}
+func showNoActivate(win *application.WebviewWindow) {}
