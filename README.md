@@ -61,7 +61,3 @@ MIT License © 2026 [urakamza](https://urakamza.kr)
 ```
 이 소프트웨어는 MIT 라이선스 하에 자유롭게 사용, 수정, 배포할 수 있습니다.
 ```
-
----
-
-[홈페이지](https://urakamza.kr)
