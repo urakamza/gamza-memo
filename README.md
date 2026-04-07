@@ -14,7 +14,7 @@
 - **시작 시 자동 실행** — Windows 시작 시 자동으로 실행 가능
 ## 설치 방법
 
-1. [Github Releases](https://github.com/urakamza/gamza-memo/releases) 페이지에서 최신 버전의 `gamzamemo.exe`를 다운로드합니다.
+1. [GitHub Releases](https://github.com/urakamza/gamza-memo/releases) 페이지에서 최신 버전의 `gamzamemo.exe`를 다운로드합니다.
 2. 원하는 폴더에 저장 후 실행합니다.
 3. 별도 설치 없이 바로 사용할 수 있습니다.
 
