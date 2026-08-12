@@ -108,11 +108,21 @@ export function OpenMainWindow() {
 }
 
 /**
+ * OpenNoteWindow는 사용자가 직접(클릭, 우클릭 메뉴 등) 노트를 열 때 사용한다.
+ * 지연 없이 즉시 창을 표시한다.
  * @param {string} id
  * @returns {$CancellablePromise<void>}
  */
 export function OpenNoteWindow(id) {
     return $Call.ByID(3053419677, id);
+}
+
+/**
+ * @param {string} id
+ * @returns {$CancellablePromise<void>}
+ */
+export function PrepareContextMenu(id) {
+    return $Call.ByID(829703028, id);
 }
 
 /**

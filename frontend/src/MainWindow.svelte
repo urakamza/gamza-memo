@@ -76,6 +76,10 @@
             isDark = e.data.theme === 'dark' || (e.data.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
             confirmDelete = e.data.confirmDelete;
         });
+        Events.On('note:contextmenu-delete-request', (e) => {
+            deleteTargetId = e.data;
+            showDeleteConfirm = true;
+        })
     });
 
     async function updateSettings() {
@@ -224,8 +228,10 @@
                         class="note-item"
                         role="button"
                         tabindex="0"
+                        style="--custom-contextmenu: note-item-menu; --custom-contextmenu-data: {note.id}"
                         on:click={() => NoteService.OpenNoteWindow(note.id)}
                         on:keydown={(e) => { if(e.key === 'Enter') NoteService.OpenNoteWindow(note.id) }}
+                        on:contextmenu={() => NoteService.PrepareContextMenu(note.id)}
                     >
                         <div class="left-bar" style="background-color: {isDark ? `rgb(${adjustLightness(note.color, -0.2, 'clamp')})` : `rgb(${adjustLightness(note.color, 0.08, 'invert')})`}"></div>
                         <p class="note-preview">

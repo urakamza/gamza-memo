@@ -19,14 +19,15 @@ import (
 )
 
 type NoteService struct {
-	db           *sql.DB
-	app          *application.App
-	windows      map[string]*application.WebviewWindow
-	mainWindow   *application.WebviewWindow
-	updateTimers map[string]*time.Timer
-	pendingNotes map[string]Note
-	mu           sync.Mutex
-	settings     Settings
+	db             *sql.DB
+	app            *application.App
+	windows        map[string]*application.WebviewWindow
+	mainWindow     *application.WebviewWindow
+	updateTimers   map[string]*time.Timer
+	pendingNotes   map[string]Note
+	mu             sync.Mutex
+	settings       Settings
+	toggleMenuItem *application.MenuItem
 }
 type Note struct {
 	Id          string `json:"id"`
@@ -57,6 +58,13 @@ func (s *NoteService) OpenMainWindow() {
 	}
 	if height == 0 {
 		height = 400
+	}
+
+	x, y, corrected := clampToVisibleScreen(s.app, x, y, width, height)
+	if corrected {
+		s.settings.MainWinX = x
+		s.settings.MainWinY = y
+		s.saveSettings()
 	}
 
 	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -318,7 +326,17 @@ func (s *NoteService) DeleteNote(id string) error {
 	return nil
 }
 
+// OpenNoteWindow는 사용자가 직접(클릭, 우클릭 메뉴 등) 노트를 열 때 사용한다.
+// 지연 없이 즉시 창을 표시한다.
 func (s *NoteService) OpenNoteWindow(id string) {
+	s.openNoteWindowInternal(id, false)
+}
+
+// openNoteWindowInternal이 실제 창 생성을 담당한다.
+// delayed가 true면 500ms 대기 후 포커스 없이 표시한다.
+// (프로그램 시작 시 여러 창이 한꺼번에 뜰 때 작업표시줄 깜빡임 방지용)
+// delayed가 false면 지연 없이 바로 표시한다. (사용자가 직접 여는 경우)
+func (s *NoteService) openNoteWindowInternal(id string, delayed bool) {
 	if win, exists := s.windows[id]; exists {
 		win.Focus()
 		return
@@ -343,6 +361,12 @@ func (s *NoteService) OpenNoteWindow(id string) {
 	if y == 0 {
 		y = 100
 	}
+
+	x, y, corrected := clampToVisibleScreen(s.app, x, y, width, height)
+	if corrected {
+		s.db.Exec(`UPDATE notes SET win_x=?, win_y=? WHERE id=?`, x, y, id)
+	}
+
 	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:          "메모",
 		Width:          width,
@@ -433,11 +457,18 @@ func (s *NoteService) OpenNoteWindow(id string) {
 		s.emitNotesUpdated()
 		println("창 닫힘:", time.Now().Format("15:04:05"))
 	})
-	go func() {
-		time.Sleep(500 * time.Millisecond)
+	if delayed {
+		// 프로그램 시작 시 여러 창이 한꺼번에 뜨는 상황: 지연 후 포커스 없이 표시
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			showNoActivate(win)
+			win.Show()
+		}()
+	} else {
+		// 사용자가 직접 여는 상황: 지연 없이 즉시 표시
 		showNoActivate(win)
 		win.Show()
-	}()
+	}
 }
 
 func (s *NoteService) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
@@ -450,7 +481,7 @@ func (s *NoteService) ServiceStartup(ctx context.Context, options application.Se
 		openCount := 0
 		for _, note := range notes {
 			if note.IsOpen {
-				s.OpenNoteWindow(note.Id)
+				s.openNoteWindowInternal(note.Id, true)
 				openCount++
 			}
 		}
@@ -582,4 +613,74 @@ func (s *NoteService) OpenImageViewer(noteId string, src string) {
 		Frameless: true,
 	})
 	win.Show()
+}
+
+func (s *NoteService) setupContextMenus() {
+	menu := s.app.ContextMenu.New()
+
+	s.toggleMenuItem = menu.Add("열기 / 닫기")
+	s.toggleMenuItem.OnClick(func(ctx *application.Context) {
+		id := ctx.ContextMenuData()
+		note, err := s.GetNoteById(id)
+		if err != nil {
+			return
+		}
+		if note.IsOpen {
+			s.CloseNote(id)
+		} else {
+			s.OpenNoteWindow(id)
+		}
+	})
+
+	menu.AddSeparator()
+
+	menu.Add("메모 위치 초기화").OnClick(func(ctx *application.Context) {
+		id := ctx.ContextMenuData()
+		s.resetNoteWindowPosition(id)
+	})
+
+	menu.AddSeparator()
+
+	menu.Add("메모 삭제").OnClick(func(ctx *application.Context) {
+		id := ctx.ContextMenuData()
+		if s.settings.ConfirmDelete {
+			s.app.Event.Emit("note:contextmenu-delete-request", id)
+			return
+		}
+		s.DeleteNote(id)
+	})
+
+	s.app.ContextMenu.Add("note-item-menu", menu)
+}
+
+func (s *NoteService) PrepareContextMenu(id string) {
+	note, err := s.GetNoteById(id)
+	if err != nil {
+		return
+	}
+	if s.toggleMenuItem == nil {
+		return
+	}
+	if note.IsOpen {
+		s.toggleMenuItem.SetLabel("닫기")
+	} else {
+		s.toggleMenuItem.SetLabel("열기")
+	}
+
+	menu, ok := s.app.ContextMenu.Get("note-item-menu")
+	if ok {
+		menu.Update()
+	}
+}
+
+func (s *NoteService) resetNoteWindowPosition(id string) {
+	const defaultX, defaultY = 100, 100
+
+	s.db.Exec(`UPDATE notes SET win_x=?, win_y=? WHERE id=?`, defaultX, defaultY, id)
+
+	if win, exists := s.windows[id]; exists {
+		win.SetPosition(defaultX, defaultY)
+		win.Focus()
+	}
+	s.emitNotesUpdated()
 }

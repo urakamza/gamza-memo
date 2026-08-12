@@ -39,6 +39,7 @@ func main() {
 		},
 	})
 	noteService.app = app
+	noteService.setupContextMenus()
 
 	tray := app.SystemTray.New()
 	tray.SetLabel("감자 메모")
