@@ -42,6 +42,29 @@
     let menuOpen = false;
     let menuEl;
 
+    // 커서 위치가 하단 툴바에 가려져 있으면 보이도록 에디터를 스크롤한다.
+    function scrollCursorIntoView() {
+        if (!editor) return;
+        const wrapper = editorEl?.closest('.editor-wrapper');
+        const toolbarEl = document.querySelector('.toolbar.visible');
+        if (!wrapper) return;
+
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from); // 커서의 뷰포트 기준 좌표
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const toolbarHeight = toolbarEl ? toolbarEl.getBoundingClientRect().height : 0;
+
+        // 커서 하단(coords.bottom)이 "에디터 영역 하단 - 툴바 높이"보다 아래에 있으면
+        // 그만큼 스크롤을 내려서 커서가 툴바 위로 보이게 한다.
+        const visibleBottom = wrapperRect.bottom - toolbarHeight;
+        if (coords.bottom > visibleBottom) {
+            wrapper.scrollTo({
+                top: wrapper.scrollTop + (coords.bottom - visibleBottom) + 8, // 여유 8px
+                behavior: 'smooth',
+            });
+        }
+    }
+
     function updateActiveStates() {
         isBulletList = editor.isActive('bulletList');
         isOrderedList = editor.isActive('orderedList');
@@ -140,6 +163,82 @@
         selectable: false,
     });
 
+    // 붙여넣은 HTML에서 블록 서식(제목/코드/인용구/목록 등)을 제거하고
+    // 인라인 서식(굵게/기울임/밑줄/취소선)만 남긴다.
+    // 붙여넣은 HTML에서 제목(h1~h6)/코드(pre, code)/인용구(blockquote)만
+    // 일반 문단(p)이나 텍스트로 변환한다. p, div, li, br 등 나머지 구조는
+    // 건드리지 않고 그대로 둔다.
+    function sanitizePastedHtml(html) {
+        const container = document.createElement('div');
+        container.innerHTML = html;
+
+        // 컨테이너 최상위 자식들 중 공백만 있는 텍스트 노드나 주석 노드
+        // (<!--StartFragment--> 등 붙여넣기 시 브라우저가 끼워넣는 마커) 제거.
+        // h1 등 태그 "안"이 아니라 태그들 "사이"에 남는 \r\n, 주석이 원인이므로
+        // 태그 내부를 정리하는 로직과는 별개로 최상위에서 한 번 정리한다.
+        Array.from(container.childNodes).forEach(node => {
+            if (node.nodeType === Node.COMMENT_NODE) {
+                node.remove();
+            } else if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
+                node.remove();
+            }
+        });
+
+        // 해당 요소 내부 텍스트 노드의 개행/탭을 공백으로 정리
+        // (웹페이지 소스 들여쓰기로 생긴 장식용 공백 제거)
+        function cleanInnerWhitespace(el) {
+            for (const node of Array.from(el.childNodes)) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    node.textContent = node.textContent.replace(/[\n\r\t]+/g, ' ');
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    cleanInnerWhitespace(node);
+                }
+            }
+            // 앞뒤 여백도 정리
+            if (el.firstChild?.nodeType === Node.TEXT_NODE) {
+                el.firstChild.textContent = el.firstChild.textContent.replace(/^\s+/, '');
+            }
+            if (el.lastChild?.nodeType === Node.TEXT_NODE) {
+                el.lastChild.textContent = el.lastChild.textContent.replace(/\s+$/, '');
+            }
+        }
+
+        // 제목(h1~h6), 인용구(blockquote) -> <p>로 변환
+        container.querySelectorAll('h1, h2, h3, h4, h5, h6, blockquote').forEach(el => {
+            cleanInnerWhitespace(el);
+            const p = document.createElement('p');
+            while (el.firstChild) p.appendChild(el.firstChild);
+            el.replaceWith(p);
+        });
+
+        // 코드블록(pre) -> 텍스트만 남긴 <p> (여러 줄이면 <br>로 줄 구분 유지)
+        container.querySelectorAll('pre').forEach(el => {
+            const text = el.textContent;
+            const p = document.createElement('p');
+            const lines = text.split('\n');
+            lines.forEach((line, i) => {
+                if (i > 0) p.appendChild(document.createElement('br'));
+                p.appendChild(document.createTextNode(line));
+            });
+            el.replaceWith(p);
+        });
+
+        // 인라인 코드(code) -> 태그만 벗기고 텍스트 유지
+        container.querySelectorAll('code').forEach(el => {
+            const text = document.createTextNode(el.textContent);
+            el.replaceWith(text);
+        });
+
+        // 나머지 허용되지 않는 태그(span, font, a 등)는 스타일/클래스만 제거하고
+        // 구조는 그대로 둔다. 굳이 벗기지 않아도 렌더링엔 영향 없음.
+        container.querySelectorAll('*').forEach(el => {
+            el.removeAttribute('style');
+            el.removeAttribute('class');
+        });
+
+        return container.innerHTML;
+    }
+
     onMount(async () => {
         const prevent = (e) => {
             e.preventDefault();
@@ -201,16 +300,27 @@
                 },
                 handlePaste(view, event) {
                     const items = event.clipboardData?.items;
-                    if (!items) return false;
-                    let images = 0;
-                    for (const item of items) {
-                        if (item.type.startsWith('image/')) {
-                            handleImageFile(item.getAsFile());
-                            images++;
+                    if (items) {
+                        let images = 0;
+                        for (const item of items) {
+                            if (item.type.startsWith('image/')) {
+                                handleImageFile(item.getAsFile());
+                                images++;
+                            }
                         }
+                        if (images > 0) return true;
                     }
-                    if (images <= 0) return false;
-                    return true;
+
+                    const html = event.clipboardData?.getData('text/html');
+                    if (html) {
+                        const cleaned = sanitizePastedHtml(html);
+                        editor.chain().focus().insertContent(cleaned).run();
+                        event.preventDefault();
+                        return true;
+                    }
+
+                    // text/html이 없으면(순수 텍스트 복사) 기본 동작에 맡김
+                    return false;
                 },
                 handleDrop(view, event) {
                     if (isDraggingInternal) return false;
@@ -230,12 +340,16 @@
             onUpdate: ({ editor }) => {
                 note.content = editor.getHTML();
                 handleInput();
+            },
+            onTransaction() {
                 updateActiveStates();
             },
-            onSelectionUpdate() {
-                updateActiveStates();
+            onFocus() {
+                editorFocused = true;
+                // 하단 툴바가 나타나는 트랜지션(0.15s) 이후, 커서 위치가
+                // 툴바에 가려져 있으면 보이도록 스크롤한다.
+                setTimeout(() => scrollCursorIntoView(), 160);
             },
-            onFocus() { editorFocused = true; },
             onBlur() {
                 editorFocused = false;
                 if (isComposing) {
