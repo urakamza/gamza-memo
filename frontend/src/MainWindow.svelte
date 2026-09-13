@@ -205,7 +205,7 @@
 
                 <div class="setting-item">
                     <h2>프로그램 정보</h2>
-                    <p class="verinfo">감자 메모 Ver 1.0.1</p>
+                    <p class="verinfo">감자 메모 Ver 1.1.2-Beta</p>
                     <a href="https://github.com/urakamza" on:click|preventDefault={(e) => Browser.OpenURL(e.currentTarget.href)}>GitHub</a>
                     <a href="https://urakamza.kr" on:click|preventDefault={(e) => Browser.OpenURL(e.currentTarget.href)}>개발자 홈페이지</a>
                 </div>
