@@ -11,7 +11,10 @@
   },
   "dependencies": {
     "@tiptap/core": "^3.20.4",
+    "@tiptap/extension-bold": "^3.31.3",
     "@tiptap/extension-image": "^3.20.4",
+    "@tiptap/extension-italic": "^3.31.3",
+    "@tiptap/extension-strike": "^3.31.3",
     "@tiptap/starter-kit": "^3.20.4",
     "@wailsio/runtime": "^3.0.0-beta.15",
     "svrollbar": "^0.12.0"

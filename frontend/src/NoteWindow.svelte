@@ -5,6 +5,9 @@
     import { OpenNoteWindow } from "../bindings/changeme/noteservice";
     import { Editor } from "@tiptap/core";
     import StarterKit from "@tiptap/starter-kit";
+    import Bold from "@tiptap/extension-bold";
+    import Italic from "@tiptap/extension-italic";
+    import Strike from "@tiptap/extension-strike";
     import Image from "@tiptap/extension-image";
     import Icon from "./Icon.svelte";
     import { applyTheme, watchSystemTheme } from "./lib/theme";
@@ -157,6 +160,12 @@
         }
     }
 
+    // 굵게/기울임/취소선/인라인 코드는 마크다운 자동변환(**, *, ~~, `) 없이
+    // 툴바 버튼으로만 켜고 끌 수 있도록 입력 규칙을 제거한다.
+    const NoAutoBold = Bold.extend({ addInputRules() { return []; } });
+    const NoAutoItalic = Italic.extend({ addInputRules() { return []; } });
+    const NoAutoStrike = Strike.extend({ addInputRules() { return []; } });
+
     const InlineImage = Image.extend({
         inline: true,
         group: 'inline',
@@ -283,7 +292,23 @@
         });
         editor = new Editor({
             element: editorEl,
-            extensions: [StarterKit.configure({link: false}), InlineImage],
+            extensions: [
+                StarterKit.configure({
+                    link: false,
+                    heading: false,
+                    codeBlock: false,
+                    blockquote: false,
+                    horizontalRule: false, // --- 가로줄 자동변환 차단 (툴바 버튼도 없음)
+                    code: false,           // 인라인 코드 완전 비활성화 (툴바 버튼도 없음)
+                    bold: false,   // 아래 NoAutoBold로 대체
+                    italic: false, // 아래 NoAutoItalic로 대체
+                    strike: false, // 아래 NoAutoStrike로 대체
+                }),
+                NoAutoBold,
+                NoAutoItalic,
+                NoAutoStrike,
+                InlineImage,
+            ],
             content: note.content,
             editorProps: {
                 attributes: {
